@@ -2,7 +2,7 @@ package types
 
 type TorrentMetadata struct {
 	Announce     string
-	AnnounceList []string
+	AnnounceList [][]string
 	CreationDate int64
 	Comment      string
 	Encoding     string

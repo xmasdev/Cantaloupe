@@ -17,7 +17,66 @@ func TestLoad(t *testing.T) {
 	if metadata == nil {
 		t.Fatal("expected metadata, got nil")
 	}
-	t.Log(metadata)
+
+	t.Logf("Metadata: %+v", metadata)
+	t.Logf("Info: %+v", metadata.Info)
+
+	// Announce
+	expectedAnnounce := "https://tracker.example.com/announce"
+
+	if metadata.Announce != expectedAnnounce {
+		t.Errorf(
+			"expected announce %q, got %q",
+			expectedAnnounce,
+			metadata.Announce,
+		)
+	}
+
+	// Announce list
+	expectedAnnounceList := [][]string{
+		{
+			"https://tracker1.example.com/announce",
+		},
+		{
+			"https://tracker2.example.com/announce",
+			"https://tracker3.example.com/announce",
+		},
+	}
+
+	if len(metadata.AnnounceList) != len(expectedAnnounceList) {
+		t.Fatalf(
+			"expected %d announce-list tiers, got %d",
+			len(expectedAnnounceList),
+			len(metadata.AnnounceList),
+		)
+	}
+
+	for i, expectedTier := range expectedAnnounceList {
+		gotTier := metadata.AnnounceList[i]
+
+		if len(gotTier) != len(expectedTier) {
+			t.Fatalf(
+				"tier %d: expected %d trackers, got %d",
+				i,
+				len(expectedTier),
+				len(gotTier),
+			)
+		}
+
+		for j, expectedTracker := range expectedTier {
+			if gotTier[j] != expectedTracker {
+				t.Errorf(
+					"tier %d tracker %d: expected %q, got %q",
+					i,
+					j,
+					expectedTracker,
+					gotTier[j],
+				)
+			}
+		}
+	}
+
+	// Info
 	info := metadata.Info
 
 	if info.Name != "hello.txt" {
@@ -25,13 +84,20 @@ func TestLoad(t *testing.T) {
 	}
 
 	if info.PieceLength != 16384 {
-		t.Errorf("expected piece length %d, got %d", 16384, info.PieceLength)
+		t.Errorf(
+			"expected piece length %d, got %d",
+			16384,
+			info.PieceLength,
+		)
 	}
 
 	expectedPieceHash := "89cc388db3ecef162d14f5b82cf0021c099972a9"
 
 	if len(info.Pieces) != 20 {
-		t.Fatalf("expected 20 bytes of piece hashes, got %d", len(info.Pieces))
+		t.Fatalf(
+			"expected 20 bytes of piece hashes, got %d",
+			len(info.Pieces),
+		)
 	}
 
 	gotPieceHash := fmt.Sprintf("%x", info.Pieces)
@@ -45,7 +111,11 @@ func TestLoad(t *testing.T) {
 	}
 
 	if info.Length != 23 {
-		t.Errorf("expected length %d, got %d", 23, info.Length)
+		t.Errorf(
+			"expected length %d, got %d",
+			23,
+			info.Length,
+		)
 	}
 
 	if len(info.Files) != 0 {
