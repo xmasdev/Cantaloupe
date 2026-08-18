@@ -9,3 +9,10 @@ type AnnounceRequest struct {
 	Left       int64
 	Event      string
 }
+
+type AnnounceResponse struct {
+	Interval   int64
+	Peers      []Peer
+	Complete   int64
+	Incomplete int64
+}
