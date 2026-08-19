@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 	"testing"
+
+	"github.com/xmasdev/Cantaloupe/engine/peer/messages"
 )
 
 func TestWriteReadMessage(t *testing.T) {
@@ -21,8 +23,8 @@ func TestWriteReadMessage(t *testing.T) {
 		conn: server,
 	}
 
-	expected := Message{
-		ID:      Interested,
+	expected := messages.Message{
+		ID:      messages.Interested,
 		Payload: []byte{},
 	}
 
@@ -75,8 +77,8 @@ func TestWriteReadMessageWithPayload(t *testing.T) {
 		conn: server,
 	}
 
-	expected := Message{
-		ID: Piece,
+	expected := messages.Message{
+		ID: messages.Piece,
 		Payload: []byte{
 			0x01, 0x02, 0x03, 0x04,
 			0x05, 0x06, 0x07, 0x08,
@@ -132,7 +134,7 @@ func TestWriteReadKeepAlive(t *testing.T) {
 		conn: server,
 	}
 
-	expected := Message{
+	expected := messages.Message{
 		KeepAlive: true,
 	}
 
@@ -182,11 +184,11 @@ func TestWriteReadMultipleMessages(t *testing.T) {
 		conn: server,
 	}
 
-	messages := []Message{
-		{ID: Interested},
-		{ID: Have, Payload: []byte{0, 0, 0, 5}},
+	messages := []messages.Message{
+		{ID: messages.Interested},
+		{ID: messages.Have, Payload: []byte{0, 0, 0, 5}},
 		{KeepAlive: true},
-		{ID: Request, Payload: []byte{1, 2, 3}},
+		{ID: messages.Request, Payload: []byte{1, 2, 3}},
 	}
 
 	errCh := make(chan error, 1)
@@ -291,7 +293,7 @@ func TestReadMessageTruncated(t *testing.T) {
 		// Length says 5 bytes follow, but only send 2.
 		data := []byte{
 			0, 0, 0, 5,
-			Interested,
+			messages.Interested,
 			1,
 		}
 

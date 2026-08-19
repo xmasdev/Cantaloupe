@@ -5,25 +5,8 @@ import (
 	"errors"
 	"io"
 	"net"
-)
 
-type Message struct {
-	ID        byte
-	Payload   []byte
-	KeepAlive bool
-}
-
-const (
-	Choke         byte = 0
-	Unchoke       byte = 1
-	Interested    byte = 2
-	NotInterested byte = 3
-	Have          byte = 4
-	Bitfield      byte = 5
-	Request       byte = 6
-	Piece         byte = 7
-	Cancel        byte = 8
-	Port          byte = 9
+	"github.com/xmasdev/Cantaloupe/engine/peer/messages"
 )
 
 const maxMessageLength = 1 << 14 // 16 KiB
@@ -50,7 +33,7 @@ func (c *Connection) Close() error {
 
 // Read and Write message
 
-func (c *Connection) WriteMessage(message Message) error {
+func (c *Connection) WriteMessage(message messages.Message) error {
 	var length uint32
 
 	if message.KeepAlive {
@@ -70,21 +53,21 @@ func (c *Connection) WriteMessage(message Message) error {
 
 	return writeFull(c.conn, buffer)
 }
-func (c *Connection) ReadMessage() (Message, error) {
+func (c *Connection) ReadMessage() (messages.Message, error) {
 	var lengthBuffer [4]byte
 
 	if _, err := io.ReadFull(c.conn, lengthBuffer[:]); err != nil {
-		return Message{}, err
+		return messages.Message{}, err
 	}
 
 	length := binary.BigEndian.Uint32(lengthBuffer[:])
 
 	if length > maxMessageLength {
-		return Message{}, errors.New("message length exceeds maximum message size")
+		return messages.Message{}, errors.New("message length exceeds maximum message size")
 	}
 
 	if length == 0 {
-		return Message{
+		return messages.Message{
 			KeepAlive: true,
 		}, nil
 	}
@@ -92,10 +75,10 @@ func (c *Connection) ReadMessage() (Message, error) {
 	messageBuffer := make([]byte, length)
 
 	if _, err := io.ReadFull(c.conn, messageBuffer); err != nil {
-		return Message{}, err
+		return messages.Message{}, err
 	}
 
-	return Message{
+	return messages.Message{
 		ID:      messageBuffer[0],
 		Payload: messageBuffer[1:],
 	}, nil
