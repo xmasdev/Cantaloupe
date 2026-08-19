@@ -111,3 +111,20 @@ func PortMessage(port uint16) Message {
 		Payload: payload,
 	}
 }
+
+func PieceMessage(
+	pieceIndex uint32,
+	begin uint32,
+	block []byte,
+) Message {
+	payload := make([]byte, 8+len(block))
+
+	binary.BigEndian.PutUint32(payload[0:4], pieceIndex)
+	binary.BigEndian.PutUint32(payload[4:8], begin)
+	copy(payload[8:], block)
+
+	return Message{
+		ID:      Piece,
+		Payload: payload,
+	}
+}
