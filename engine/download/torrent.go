@@ -13,6 +13,10 @@ type TorrentDownload struct {
 }
 
 func NewTorrentDownload(info *types.Info) (*TorrentDownload, error) {
+	if info == nil {
+		return nil, errors.New("torrent info cannot be nil")
+	}
+
 	total, err := totalLength(info)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate total length: %w", err)
@@ -80,9 +84,10 @@ func NewTorrentDownload(info *types.Info) (*TorrentDownload, error) {
 }
 
 func (t *TorrentDownload) NextMissingPiece() *Piece {
-	for _, piece := range t.Pieces {
+	for i := range t.Pieces {
+		piece := &t.Pieces[i]
 		if !piece.Complete() {
-			return &piece
+			return piece
 		}
 	}
 
@@ -90,13 +95,14 @@ func (t *TorrentDownload) NextMissingPiece() *Piece {
 }
 
 func (t *TorrentDownload) NextPieceForPeer(bitfield types.Bitfield) *Piece {
-	for _, piece := range t.Pieces {
+	for i := range t.Pieces {
+		piece := &t.Pieces[i]
 		if piece.Complete() {
 			continue
 		}
 
 		if bitfield.HasPiece(piece.Index) {
-			return &piece
+			return piece
 		}
 	}
 
@@ -108,7 +114,7 @@ func (t *TorrentDownload) HandlePiece(data messages.PieceData) error {
 		return fmt.Errorf("piece index out of range: %d", data.PieceIndex)
 	}
 
-	piece := t.Pieces[data.PieceIndex]
+	piece := &t.Pieces[data.PieceIndex]
 
 	if err := piece.SetBlock(int(data.Begin), data.Block); err != nil {
 		return fmt.Errorf(

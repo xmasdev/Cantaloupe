@@ -29,6 +29,36 @@ func DownloadPiece(
 		return errors.New("peer has no missing pieces")
 	}
 
+	return downloadPiece(torrent, session, piece)
+}
+
+func DownloadPieceFor(
+	torrent *TorrentDownload,
+	session *peer.PeerSession,
+	piece *Piece,
+) error {
+	if torrent == nil {
+		return errors.New("torrent download cannot be nil")
+	}
+	if session == nil {
+		return errors.New("peer session cannot be nil")
+	}
+	if piece == nil {
+		return errors.New("piece cannot be nil")
+	}
+	if session.Choked {
+		return errors.New("peer is choked")
+	}
+
+	return downloadPiece(torrent, session, piece)
+}
+
+func downloadPiece(
+	torrent *TorrentDownload,
+	session *peer.PeerSession,
+	piece *Piece,
+) error {
+
 	for _, block := range piece.Blocks {
 		if len(block.Data) == block.Length {
 			continue

@@ -16,6 +16,11 @@ type Connection struct {
 	peerId [20]byte
 }
 
+// NewConnection wraps an already-accepted network connection.
+func NewConnection(conn net.Conn) *Connection {
+	return &Connection{conn: conn}
+}
+
 func Connect(address string) (*Connection, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {

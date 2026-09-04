@@ -12,7 +12,7 @@ type AnnounceRequest struct {
 
 type AnnounceResponse struct {
 	Interval   int64
-	Peers      []Peer
+	Peers      []*Peer
 	Complete   int64
 	Incomplete int64
 }

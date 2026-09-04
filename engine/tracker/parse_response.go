@@ -70,7 +70,7 @@ func parseAnnounceResponse(data []byte) (*types.AnnounceResponse, error) {
 	return response, nil
 }
 
-func parseCompactPeers(data []byte) ([]types.Peer, error) {
+func parseCompactPeers(data []byte) ([]*types.Peer, error) {
 	if len(data)%6 != 0 {
 		return nil, fmt.Errorf(
 			"invalid compact peer list length: %d",
@@ -78,7 +78,7 @@ func parseCompactPeers(data []byte) ([]types.Peer, error) {
 		)
 	}
 
-	peers := make([]types.Peer, 0, len(data)/6)
+	peers := make([]*types.Peer, 0, len(data)/6)
 
 	for i := 0; i < len(data); i += 6 {
 		ip := net.IPv4(
@@ -90,7 +90,7 @@ func parseCompactPeers(data []byte) ([]types.Peer, error) {
 
 		port := uint16(data[i+4])<<8 | uint16(data[i+5])
 
-		peers = append(peers, types.Peer{
+		peers = append(peers, &types.Peer{
 			IP:   ip,
 			Port: port,
 		})

@@ -23,6 +23,20 @@ type PeerSession struct {
 	RemoteBitfield types.Bitfield
 }
 
+// NewPeerSessionFromConnection creates a session after the protocol
+// handshake has been completed by the caller.
+func NewPeerSessionFromConnection(connection *Connection) *PeerSession {
+	if connection == nil {
+		return nil
+	}
+
+	return &PeerSession{
+		Connection: connection,
+		PeerID:     connection.peerId,
+		Choked:     true,
+	}
+}
+
 func NewPeerSession(
 	address string,
 	infoHash [20]byte,
@@ -119,6 +133,26 @@ func (p *PeerSession) WaitForBitfield() error {
 		}
 
 		if message.ID == messages.Bitfield {
+			return nil
+		}
+	}
+}
+
+func (p *PeerSession) WaitForUnchoke() error {
+	for {
+		message, err := p.ReadMessage()
+		if err != nil {
+			return fmt.Errorf(
+				"failed while waiting for unchoke: %w",
+				err,
+			)
+		}
+
+		if message.KeepAlive {
+			continue
+		}
+
+		if message.ID == messages.Unchoke {
 			return nil
 		}
 	}
