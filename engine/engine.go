@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/xmasdev/Cantaloupe/engine/download"
@@ -29,6 +30,9 @@ type Engine struct {
 
 	Listener net.Listener
 	Peers    []*peer.PeerSession
+
+	DownloadedBytes atomic.Int64
+	UploadedBytes   atomic.Int64
 
 	stateMu    sync.RWMutex
 	state      string
@@ -338,6 +342,7 @@ func (e *Engine) DownloadTorrent() error {
 
 					return
 				}
+				e.DownloadedBytes.Add(int64(piece.Length))
 
 				scheduler.Release(piece.Index)
 			}

@@ -42,6 +42,13 @@ func (c *Connection) SetDeadline(deadline time.Time) error {
 	return c.conn.SetDeadline(deadline)
 }
 
+func (c *Connection) RemoteAddress() string {
+	if c == nil || c.conn == nil || c.conn.RemoteAddr() == nil {
+		return ""
+	}
+	return c.conn.RemoteAddr().String()
+}
+
 func (c *Connection) Close() error {
 	return c.conn.Close()
 }

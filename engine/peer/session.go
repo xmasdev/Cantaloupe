@@ -131,6 +131,13 @@ func (p *PeerSession) HasPiece(index int) bool {
 	return p.RemoteBitfield.HasPiece(index)
 }
 
+func (p *PeerSession) RemoteAddress() string {
+	if p == nil || p.Connection == nil {
+		return ""
+	}
+	return p.Connection.RemoteAddress()
+}
+
 func (p *PeerSession) HasAnyPiece() bool {
 	for _, value := range p.RemoteBitfield {
 		if value != 0 {

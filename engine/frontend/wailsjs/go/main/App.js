@@ -14,8 +14,28 @@ export function GetDownloadStatuses() {
   return window['go']['main']['App']['GetDownloadStatuses']();
 }
 
+export function GetTorrentFiles(arg1) {
+  return window['go']['main']['App']['GetTorrentFiles'](arg1);
+}
+
+export function GetTorrentPeers(arg1) {
+  return window['go']['main']['App']['GetTorrentPeers'](arg1);
+}
+
+export function GetTorrentTrackers(arg1) {
+  return window['go']['main']['App']['GetTorrentTrackers'](arg1);
+}
+
+export function GetVerifyPieces() {
+  return window['go']['main']['App']['GetVerifyPieces']();
+}
+
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
+}
+
+export function RemoveTorrent(arg1) {
+  return window['go']['main']['App']['RemoveTorrent'](arg1);
 }
 
 export function SelectOutputDirectory() {
@@ -32,6 +52,10 @@ export function SetOutputDirectory(arg1) {
 
 export function SetTorrentPath(arg1) {
   return window['go']['main']['App']['SetTorrentPath'](arg1);
+}
+
+export function SetVerifyPieces(arg1) {
+  return window['go']['main']['App']['SetVerifyPieces'](arg1);
 }
 
 export function StartDownload() {

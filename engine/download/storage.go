@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/xmasdev/Cantaloupe/engine/types"
 )
 
 type Storage struct {
-	root string
-	info *types.Info
+	root         string
+	info         *types.Info
+	verifyPieces atomic.Bool
 }
 
 func NewStorage(root string, info *types.Info) (*Storage, error) {
@@ -35,11 +37,16 @@ func NewStorage(root string, info *types.Info) (*Storage, error) {
 		}
 	}
 
-	return &Storage{
+	storage := &Storage{
 		root: root,
 		info: info,
-	}, nil
+	}
+	storage.verifyPieces.Store(true)
+	return storage, nil
 }
+
+func (s *Storage) SetVerifyPieces(enabled bool) { s.verifyPieces.Store(enabled) }
+func (s *Storage) VerifyPieces() bool           { return s.verifyPieces.Load() }
 
 func (s *Storage) WritePiece(piece *Piece) error {
 	if piece == nil {
@@ -50,13 +57,14 @@ func (s *Storage) WritePiece(piece *Piece) error {
 		return fmt.Errorf("piece %d is incomplete", piece.Index)
 	}
 
-	valid, err := piece.Verify()
-	if err != nil {
-		return fmt.Errorf("failed to verify piece %d: %w", piece.Index, err)
-	}
-
-	if !valid {
-		return fmt.Errorf("piece %d failed SHA-1 verification", piece.Index)
+	if s.verifyPieces.Load() {
+		valid, err := piece.Verify()
+		if err != nil {
+			return fmt.Errorf("failed to verify piece %d: %w", piece.Index, err)
+		}
+		if !valid {
+			return fmt.Errorf("piece %d failed SHA-1 verification", piece.Index)
+		}
 	}
 
 	data, err := piece.Data()

@@ -1,19 +1,84 @@
-# README
+# Cantaloupe
 
-## About
+Cantaloupe is a small BitTorrent client I am building with Go, Wails, and React. The desktop interface is intentionally simple, while the engine handles peer connections, trackers, piece verification, and storage.
 
-This is the official Wails React-TS template.
+## Features
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+- Open `.torrent` files from the desktop app
+- Download single-file and multi-file torrents
+- HTTP, HTTPS, and UDP tracker support
+- Tracker tier fallback through `announce-list`
+- SHA-1 piece verification before saving
+- Pause, resume, and remove torrents
+- Multiple torrents in the library
+- Progress, verified pieces, peers, and download location details
+- Custom Cantaloupe application logo
 
-## Live Development
+The project is still being developed. DHT peer discovery, magnet links, upload/seeding, and some detailed torrent views are not finished yet.
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+## Requirements
 
-## Building
+- Go 1.25 or newer
+- Node.js and npm
+- Wails v2
+- GTK/WebKitGTK development packages on Linux
 
-To build a redistributable, production mode package, use `wails build`.
+On Ubuntu or Debian:
+
+```bash
+sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev
+```
+
+## Run the app
+
+```bash
+wails dev
+```
+
+Use **Add torrent**, choose a `.torrent` file, choose a download folder, and press **Start**. The default folder is `~/Downloads`.
+
+## Command-line downloader
+
+The engine can also be run without the desktop UI:
+
+```bash
+cd engine
+go run ./cmd/cantaloupe /path/to/file.torrent /path/to/output
+```
+
+## Development checks
+
+```bash
+go test ./...
+go test -race ./...
+go vet ./...
+```
+
+Build the frontend:
+
+```bash
+cd engine/frontend
+npm install
+npm run build
+```
+
+Build the desktop application:
+
+```bash
+wails build
+```
+
+## Project layout
+
+```text
+engine/              torrent engine, peers, trackers, and storage
+engine/cmd/          command-line downloader
+engine/frontend/     Wails React interface
+build/               desktop build assets and application icon
+```
+
+## Notes
+
+Torrent downloads depend on reachable peers. Trackers can return peers that are offline, choked, or no longer have the torrent, so it can take time for useful data to arrive.
+
+Piece verification can be disabled in Settings, but leaving it enabled is recommended for normal downloads.
