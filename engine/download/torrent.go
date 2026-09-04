@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/xmasdev/Cantaloupe/engine/peer/messages"
 	"github.com/xmasdev/Cantaloupe/engine/types"
 )
 
@@ -76,4 +77,46 @@ func NewTorrentDownload(info *types.Info) (*TorrentDownload, error) {
 	return &TorrentDownload{
 		Pieces: pieces,
 	}, nil
+}
+
+func (t *TorrentDownload) NextMissingPiece() *Piece {
+	for _, piece := range t.Pieces {
+		if !piece.Complete() {
+			return &piece
+		}
+	}
+
+	return nil
+}
+
+func (t *TorrentDownload) NextPieceForPeer(bitfield types.Bitfield) *Piece {
+	for _, piece := range t.Pieces {
+		if piece.Complete() {
+			continue
+		}
+
+		if bitfield.HasPiece(piece.Index) {
+			return &piece
+		}
+	}
+
+	return nil
+}
+
+func (t *TorrentDownload) HandlePiece(data messages.PieceData) error {
+	if uint64(data.PieceIndex) >= uint64(len(t.Pieces)) {
+		return fmt.Errorf("piece index out of range: %d", data.PieceIndex)
+	}
+
+	piece := t.Pieces[data.PieceIndex]
+
+	if err := piece.SetBlock(int(data.Begin), data.Block); err != nil {
+		return fmt.Errorf(
+			"failed to set block for piece %d: %w",
+			data.PieceIndex,
+			err,
+		)
+	}
+
+	return nil
 }

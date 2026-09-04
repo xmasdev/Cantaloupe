@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/xmasdev/Cantaloupe/engine/peer/messages"
+	"github.com/xmasdev/Cantaloupe/engine/types"
 )
 
 type PeerSession struct {
@@ -18,7 +19,7 @@ type PeerSession struct {
 	Interested bool
 
 	// Pieces currently available from the remote peer.
-	RemoteBitfield Bitfield
+	RemoteBitfield types.Bitfield
 }
 
 func NewPeerSession(
@@ -70,61 +71,59 @@ func (s *PeerSession) SendInterested() error {
 	return nil
 }
 
-func (s *PeerSession) ReadMessage() error {
-	message, err := s.Connection.ReadMessage()
+func (p *PeerSession) ReadMessage() (messages.Message, error) {
+	message, err := p.Connection.ReadMessage()
 	if err != nil {
-		return err
-	}
-
-	if message.KeepAlive {
-		return nil
+		return messages.Message{}, err
 	}
 
 	switch message.ID {
 	case messages.Choke:
-		s.Choked = true
+		p.Choked = true
 
 	case messages.Unchoke:
-		s.Choked = false
-
-	case messages.Interested:
-		// The remote peer is interested in us.
-		// We don't need to maintain anything yet.
-
-	case messages.NotInterested:
-		// The remote peer is no longer interested.
-
-	case messages.Have:
-		have, err := messages.ParseHave(message)
-		if err != nil {
-			return err
-		}
-
-		s.RemoteBitfield.SetPiece(int(have.PieceIndex))
+		p.Choked = false
 
 	case messages.Bitfield:
-		bitfield, err := messages.ParseBitfield(message)
+		data, err := messages.ParseBitfield(message)
 		if err != nil {
-			return err
+			return messages.Message{}, err
 		}
+		p.RemoteBitfield = types.Bitfield(data.Bitfield)
 
-		s.RemoteBitfield = bitfield.Bitfield
-
-	case messages.Piece:
-		// We'll handle downloaded blocks later.
-
-	case messages.Request:
-		// We'll handle upload requests later.
-
-	case messages.Cancel:
-		// We'll handle cancellations later.
-
-	case messages.Port:
-		// DHT support later.
-
-	default:
-		return errors.New("unknown peer message ID")
+	case messages.Have:
+		data, err := messages.ParseHave(message)
+		if err != nil {
+			return messages.Message{}, err
+		}
+		p.RemoteBitfield.SetPiece(int(data.PieceIndex))
 	}
 
-	return nil
+	return message, nil
+}
+
+func (p *PeerSession) HasPiece(index int) bool {
+	return p.RemoteBitfield.HasPiece(index)
+}
+
+func (p *PeerSession) RequestBlock(pieceIndex, begin, length int) error {
+	if pieceIndex < 0 {
+		return errors.New("piece index cannot be negative")
+	}
+
+	if begin < 0 {
+		return errors.New("block begin cannot be negative")
+	}
+
+	if length <= 0 {
+		return errors.New("block length must be positive")
+	}
+
+	message := messages.RequestMessage(
+		uint32(pieceIndex),
+		uint32(begin),
+		uint32(length),
+	)
+
+	return p.Connection.WriteMessage(message)
 }

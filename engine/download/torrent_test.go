@@ -3,6 +3,7 @@ package download
 import (
 	"testing"
 
+	"github.com/xmasdev/Cantaloupe/engine/peer/messages"
 	"github.com/xmasdev/Cantaloupe/engine/types"
 )
 
@@ -267,5 +268,53 @@ func TestNewTorrentDownload_CreatesBlocks(t *testing.T) {
 			"expected second block length 3616, got %d",
 			piece.Blocks[1].Length,
 		)
+	}
+}
+
+func TestTorrentDownload_HandlePiece(t *testing.T) {
+	info := &types.Info{
+		Length:      20000,
+		PieceLength: 20000,
+		Pieces:      make([]byte, 20),
+	}
+
+	download, err := NewTorrentDownload(info)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	block := make([]byte, 16384)
+	for i := range block {
+		block[i] = byte(i % 256)
+	}
+
+	data := messages.PieceData{
+		PieceIndex: 0,
+		Begin:      0,
+		Block:      block,
+	}
+
+	err = download.HandlePiece(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	piece := download.Pieces[0]
+
+	if len(piece.Blocks[0].Data) != 16384 {
+		t.Fatalf(
+			"expected block length 16384, got %d",
+			len(piece.Blocks[0].Data),
+		)
+	}
+
+	for i := range block {
+		if piece.Blocks[0].Data[i] != block[i] {
+			t.Fatalf("block data differs at byte %d", i)
+		}
+	}
+
+	if piece.Complete() {
+		t.Fatal("piece should not be complete yet")
 	}
 }

@@ -1,10 +1,12 @@
 package peer
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
 	"github.com/xmasdev/Cantaloupe/engine/peer/messages"
+	"github.com/xmasdev/Cantaloupe/engine/types"
 )
 
 func newTestSession(t *testing.T) (*PeerSession, net.Conn) {
@@ -54,7 +56,7 @@ func TestPeerSessionChoke(t *testing.T) {
 		done <- nil
 	}()
 
-	if err := session.ReadMessage(); err != nil {
+	if _, err := session.ReadMessage(); err != nil {
 		t.Fatalf("ReadMessage failed: %v", err)
 	}
 
@@ -77,7 +79,7 @@ func TestPeerSessionUnchoke(t *testing.T) {
 		done <- nil
 	}()
 
-	if err := session.ReadMessage(); err != nil {
+	if _, err := session.ReadMessage(); err != nil {
 		t.Fatalf("ReadMessage failed: %v", err)
 	}
 
@@ -109,7 +111,7 @@ func TestPeerSessionBitfield(t *testing.T) {
 		done <- nil
 	}()
 
-	if err := session.ReadMessage(); err != nil {
+	if _, err := session.ReadMessage(); err != nil {
 		t.Fatalf("ReadMessage failed: %v", err)
 	}
 
@@ -146,7 +148,7 @@ func TestPeerSessionHave(t *testing.T) {
 	session, remote := newTestSession(t)
 
 	// Initially the peer doesn't have piece 42.
-	session.RemoteBitfield = make(Bitfield, 6)
+	session.RemoteBitfield = make(types.Bitfield, 6)
 
 	if session.RemoteBitfield.HasPiece(42) {
 		t.Fatal("piece 42 should not initially be available")
@@ -163,7 +165,7 @@ func TestPeerSessionHave(t *testing.T) {
 		done <- nil
 	}()
 
-	if err := session.ReadMessage(); err != nil {
+	if _, err := session.ReadMessage(); err != nil {
 		t.Fatalf("ReadMessage failed: %v", err)
 	}
 
@@ -190,7 +192,7 @@ func TestPeerSessionKeepAlive(t *testing.T) {
 		done <- nil
 	}()
 
-	if err := session.ReadMessage(); err != nil {
+	if _, err := session.ReadMessage(); err != nil {
 		t.Fatalf("ReadMessage failed: %v", err)
 	}
 
@@ -201,5 +203,119 @@ func TestPeerSessionKeepAlive(t *testing.T) {
 	// Keep-alive should not change peer state.
 	if !session.Choked {
 		t.Error("keep-alive unexpectedly changed choke state")
+	}
+}
+
+func TestPeerSession_RequestBlock(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+
+	session := &PeerSession{
+		Connection: &Connection{
+			conn: client,
+		},
+	}
+
+	errCh := make(chan error, 1)
+
+	go func() {
+		message, err := (&Connection{conn: server}).ReadMessage()
+		if err != nil {
+			errCh <- err
+			return
+		}
+
+		request, err := messages.ParseRequest(message)
+		if err != nil {
+			errCh <- err
+			return
+		}
+
+		if request.PieceIndex != 3 {
+			errCh <- fmt.Errorf(
+				"expected piece index 3, got %d",
+				request.PieceIndex,
+			)
+			return
+		}
+
+		if request.Begin != 16384 {
+			errCh <- fmt.Errorf(
+				"expected begin 16384, got %d",
+				request.Begin,
+			)
+			return
+		}
+
+		if request.Length != 16384 {
+			errCh <- fmt.Errorf(
+				"expected length 16384, got %d",
+				request.Length,
+			)
+			return
+		}
+
+		errCh <- nil
+	}()
+
+	err := session.RequestBlock(3, 16384, 16384)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPeerSession_RequestBlock_InvalidArguments(t *testing.T) {
+	client, _ := net.Pipe()
+	defer client.Close()
+
+	session := &PeerSession{
+		Connection: &Connection{
+			conn: client,
+		},
+	}
+
+	tests := []struct {
+		name       string
+		pieceIndex int
+		begin      int
+		length     int
+	}{
+		{
+			name:       "negative piece index",
+			pieceIndex: -1,
+			begin:      0,
+			length:     16384,
+		},
+		{
+			name:       "negative begin",
+			pieceIndex: 0,
+			begin:      -1,
+			length:     16384,
+		},
+		{
+			name:       "zero length",
+			pieceIndex: 0,
+			begin:      0,
+			length:     0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := session.RequestBlock(
+				tt.pieceIndex,
+				tt.begin,
+				tt.length,
+			)
+
+			if err == nil {
+				t.Fatal("expected error")
+			}
+		})
 	}
 }
