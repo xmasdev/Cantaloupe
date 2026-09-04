@@ -29,6 +29,27 @@ type Engine struct {
 
 	Listener net.Listener
 	Peers    []*peer.PeerSession
+
+	stateMu    sync.RWMutex
+	state      string
+	stateError string
+}
+
+func (e *Engine) setState(state string, err error) {
+	e.stateMu.Lock()
+	e.state = state
+	if err != nil {
+		e.stateError = err.Error()
+	} else {
+		e.stateError = ""
+	}
+	e.stateMu.Unlock()
+}
+
+func (e *Engine) Status() (string, string) {
+	e.stateMu.RLock()
+	defer e.stateMu.RUnlock()
+	return e.state, e.stateError
 }
 
 func NewEngine(torrentPath string, outputDir string) (*Engine, error) {
@@ -78,6 +99,7 @@ func NewEngine(torrentPath string, outputDir string) (*Engine, error) {
 		Storage:  storage,
 		Listener: listener,
 		Peers:    make([]*peer.PeerSession, 0),
+		state:    "idle",
 	}, nil
 }
 
@@ -86,17 +108,7 @@ func (e *Engine) Close() error {
 		return nil
 	}
 
-	var firstErr error
-
-	for _, session := range e.Peers {
-		if session == nil {
-			continue
-		}
-
-		if err := session.Close(); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
+	firstErr := e.Stop()
 
 	if e.Listener != nil {
 		if err := e.Listener.Close(); err != nil && firstErr == nil {
@@ -107,16 +119,45 @@ func (e *Engine) Close() error {
 	return firstErr
 }
 
+// Stop pauses the transfer while retaining downloaded pieces and the
+// listening socket so a subsequent Start can resume it.
+func (e *Engine) Stop() error {
+	if e == nil {
+		return nil
+	}
+
+	var firstErr error
+	for _, session := range e.Peers {
+		if session == nil {
+			continue
+		}
+
+		if err := session.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	e.Peers = nil
+	e.setState("paused", nil)
+	return firstErr
+}
+
 func (e *Engine) Announce() (*types.AnnounceResponse, error) {
 	return e.announceWithStats(0, 0)
 }
 
 func (e *Engine) ConnectToPeers(peers []*types.Peer) error {
+	e.setState("connecting", nil)
 	if e == nil {
 		return errors.New("engine is nil")
 	}
 
-	var lastErr error
+	type result struct {
+		session *peer.PeerSession
+		err     error
+		address string
+	}
+	results := make(chan result, len(peers))
+	var wg sync.WaitGroup
 
 	for _, p := range peers {
 		if p == nil {
@@ -128,35 +169,40 @@ func (e *Engine) ConnectToPeers(peers []*types.Peer) error {
 			strconv.Itoa(int(p.Port)),
 		)
 
-		session, err := peer.NewPeerSession(
-			address,
-			e.InfoHash,
-			e.PeerID,
-		)
-		if err != nil {
-			lastErr = fmt.Errorf(
-				"failed to connect to peer %s: %w",
-				address,
-				err,
-			)
+		wg.Add(1)
+		go func(address string) {
+			defer wg.Done()
+			session, err := peer.NewPeerSession(address, e.InfoHash, e.PeerID)
+			results <- result{session: session, err: err, address: address}
+		}(address)
+	}
+	wg.Wait()
+	close(results)
+
+	var lastErr error
+	for result := range results {
+		if result.err != nil {
+			lastErr = fmt.Errorf("failed to connect to peer %s: %w", result.address, result.err)
 			continue
 		}
-
-		e.Peers = append(e.Peers, session)
+		e.Peers = append(e.Peers, result.session)
 	}
 
 	if len(e.Peers) == 0 {
 		if lastErr != nil {
+			e.setState("error", lastErr)
 			return lastErr
 		}
-
-		return errors.New("failed to connect to any peers")
+		err := errors.New("failed to connect to any peers")
+		e.setState("error", err)
+		return err
 	}
 
 	return nil
 }
 
 func (e *Engine) preparePeers() error {
+	e.setState("negotiating", nil)
 	if len(e.Peers) == 0 {
 		return errors.New("no peers available")
 	}
@@ -184,12 +230,7 @@ func (e *Engine) preparePeers() error {
 				return
 			}
 
-			if err := session.WaitForBitfield(); err != nil {
-				_ = session.Close()
-				return
-			}
-
-			if err := session.WaitForUnchoke(); err != nil {
+			if err := session.WaitForReady(); err != nil {
 				_ = session.Close()
 				return
 			}
@@ -212,7 +253,9 @@ func (e *Engine) preparePeers() error {
 	e.Peers = ready
 
 	if len(e.Peers) == 0 {
-		return errors.New("no peers became ready")
+		err := errors.New("no peers became ready")
+		e.setState("error", err)
+		return err
 	}
 
 	return nil
@@ -222,6 +265,7 @@ func (e *Engine) DownloadTorrent() error {
 	if e == nil {
 		return errors.New("engine is nil")
 	}
+	e.setState("downloading", nil)
 
 	if e.Download == nil {
 		return errors.New("engine has no download state")
@@ -232,6 +276,7 @@ func (e *Engine) DownloadTorrent() error {
 	}
 
 	if e.Download.NextMissingPiece() == nil {
+		e.setState("complete", nil)
 		return nil
 	}
 
@@ -242,6 +287,7 @@ func (e *Engine) DownloadTorrent() error {
 	if err := e.preparePeers(); err != nil {
 		return err
 	}
+	e.setState("downloading", nil)
 
 	scheduler := newPieceScheduler(e.Download)
 
@@ -274,13 +320,10 @@ func (e *Engine) DownloadTorrent() error {
 
 				if err != nil {
 					scheduler.Release(piece.Index)
-
-					errCh <- fmt.Errorf(
-						"peer failed downloading piece %d: %w",
-						piece.Index,
-						err,
-					)
-
+					// A peer can choke or disappear between selection and the
+					// request. Drop only this peer and let other peers retry the
+					// reserved piece instead of aborting the whole torrent.
+					_ = session.Close()
 					return
 				}
 
@@ -305,6 +348,7 @@ func (e *Engine) DownloadTorrent() error {
 	close(errCh)
 
 	if e.Download.NextMissingPiece() == nil {
+		e.setState("complete", nil)
 		return nil
 	}
 
@@ -362,10 +406,11 @@ func (e *Engine) announceWithStats(
 		Left:       e.Download.TotalLength(),
 	}
 
-	return tracker.Announce(
-		e.Metadata.Announce,
-		*req,
-	)
+	trackers := []string{e.Metadata.Announce}
+	for _, tier := range e.Metadata.AnnounceList {
+		trackers = append(trackers, tier...)
+	}
+	return tracker.AnnounceMany(trackers, *req)
 }
 
 func (e *Engine) Start() error {
@@ -386,20 +431,26 @@ func (e *Engine) Start() error {
 		return nil
 	}
 
+	e.setState("discovering", nil)
 	response, err := e.Announce()
 	if err != nil {
+		e.setState("error", err)
 		return fmt.Errorf("announce failed: %w", err)
 	}
 
 	if len(response.Peers) == 0 {
-		return errors.New("tracker returned no peers")
+		err := errors.New("tracker returned no peers")
+		e.setState("error", err)
+		return err
 	}
 
 	if err := e.ConnectToPeers(response.Peers); err != nil {
+		e.setState("error", err)
 		return fmt.Errorf("failed to connect to peers: %w", err)
 	}
 
 	if err := e.DownloadTorrent(); err != nil {
+		e.setState("error", err)
 		return fmt.Errorf("download failed: %w", err)
 	}
 

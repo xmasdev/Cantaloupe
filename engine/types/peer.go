@@ -9,20 +9,20 @@ type Peer struct {
 
 type Bitfield []byte
 
-func (b Bitfield) SetPiece(index int) {
+func (b *Bitfield) SetPiece(index int) {
 	if index < 0 {
 		return
 	}
 
 	byteIndex := index / 8
 
-	if byteIndex >= len(b) {
-		return
+	if byteIndex >= len(*b) {
+		*b = append(*b, make([]byte, byteIndex-len(*b)+1)...)
 	}
 
 	bitIndex := 7 - (index % 8)
 
-	b[byteIndex] |= 1 << bitIndex
+	(*b)[byteIndex] |= 1 << bitIndex
 }
 
 func (b Bitfield) HasPiece(index int) bool {

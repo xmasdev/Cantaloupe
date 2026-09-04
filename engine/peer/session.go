@@ -3,6 +3,8 @@ package peer
 import (
 	"errors"
 	"fmt"
+	"net"
+	"time"
 
 	"github.com/xmasdev/Cantaloupe/engine/peer/messages"
 	"github.com/xmasdev/Cantaloupe/engine/types"
@@ -47,7 +49,15 @@ func NewPeerSession(
 		return nil, err
 	}
 
+	if err := connection.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		connection.Close()
+		return nil, err
+	}
 	if err := Handshake(connection, infoHash, peerID); err != nil {
+		connection.Close()
+		return nil, err
+	}
+	if err := connection.SetDeadline(time.Time{}); err != nil {
 		connection.Close()
 		return nil, err
 	}
@@ -121,24 +131,76 @@ func (p *PeerSession) HasPiece(index int) bool {
 	return p.RemoteBitfield.HasPiece(index)
 }
 
-func (p *PeerSession) WaitForBitfield() error {
+func (p *PeerSession) HasAnyPiece() bool {
+	for _, value := range p.RemoteBitfield {
+		if value != 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// WaitForReady consumes peer state messages until this peer is both unchoked
+// and advertises at least one piece we can request.
+func (p *PeerSession) WaitForReady() error {
+	if err := p.Connection.SetDeadline(time.Now().Add(15 * time.Second)); err != nil {
+		return err
+	}
 	for {
 		message, err := p.ReadMessage()
 		if err != nil {
+			return fmt.Errorf("failed while waiting for peer readiness: %w", err)
+		}
+		if message.KeepAlive {
+			continue
+		}
+		if !p.Choked && p.HasAnyPiece() {
+			return p.Connection.SetDeadline(time.Time{})
+		}
+	}
+}
+
+func (p *PeerSession) WaitForBitfield() error {
+	if err := p.Connection.SetDeadline(time.Now().Add(8 * time.Second)); err != nil {
+		return err
+	}
+	haveSeen := false
+	initiallyChoked := p.Choked
+	for {
+		message, err := p.ReadMessage()
+		if err != nil {
+			var networkErr net.Error
+			if haveSeen && errors.As(err, &networkErr) && networkErr.Timeout() {
+				return nil
+			}
 			return fmt.Errorf("failed while waiting for bitfield: %w", err)
 		}
 
 		if message.KeepAlive {
 			continue
 		}
+		if initiallyChoked && haveSeen && !p.Choked {
+			return nil
+		}
 
 		if message.ID == messages.Bitfield {
 			return nil
+		}
+		// Some peers do not send a bitfield and advertise availability
+		// with HAVE messages instead. One HAVE is enough to proceed.
+		if message.ID == messages.Have {
+			haveSeen = true
 		}
 	}
 }
 
 func (p *PeerSession) WaitForUnchoke() error {
+	if !p.Choked {
+		return nil
+	}
+	if err := p.Connection.SetDeadline(time.Now().Add(8 * time.Second)); err != nil {
+		return err
+	}
 	for {
 		message, err := p.ReadMessage()
 		if err != nil {

@@ -119,6 +119,11 @@ func downloadStatus(engine *clientengine.Engine, status DownloadStatus) Download
 	if engine == nil || engine.Download == nil || engine.Metadata == nil {
 		return status
 	}
+	phase, phaseError := engine.Status()
+	if phase != "" {
+		status.State = phase
+		status.Error = phaseError
+	}
 
 	var downloaded int64
 	var completed int
@@ -174,7 +179,20 @@ func (a *App) StartTorrent(torrentPath string, outputDir string) error {
 	existing := a.jobs[torrentPath]
 	a.mu.RUnlock()
 	if existing != nil {
-		return fmt.Errorf("torrent is already in the library")
+		if existing.status.State == "downloading" || existing.status.State == "discovering" || existing.status.State == "connecting" || existing.status.State == "negotiating" {
+			return fmt.Errorf("torrent is already downloading")
+		}
+		if err := existing.engine.Stop(); err != nil {
+			return err
+		}
+		a.mu.Lock()
+		existing.status.State = "starting"
+		existing.status.Error = ""
+		existing.status.OutputDir = outputDir
+		a.engine, a.status = existing.engine, existing.status
+		a.mu.Unlock()
+		a.runTorrent(existing)
+		return nil
 	}
 
 	engine, err := clientengine.NewEngine(torrentPath, outputDir)
@@ -192,21 +210,25 @@ func (a *App) StartTorrent(torrentPath string, outputDir string) error {
 	a.jobs[torrentPath] = job
 	a.engine, a.status = engine, status
 	a.mu.Unlock()
+	a.runTorrent(job)
+	return nil
+}
 
+func (a *App) runTorrent(job *downloadJob) {
 	go func() {
-		err := engine.Start()
-		latest := downloadStatus(engine, status)
+		err := job.engine.Start()
+		latest := downloadStatus(job.engine, job.status)
 		a.mu.Lock()
 		defer a.mu.Unlock()
 		status := latest
-		wasStopping := job.status.State == "stopping"
-		if status.State == "stopping" {
-			status.State = "idle"
-		} else if wasStopping {
-			status.State = "idle"
+		wasPaused := job.status.State == "paused" || job.status.State == "stopping"
+		if wasPaused {
+			status.State = "paused"
 		} else if err != nil {
 			status.State = "error"
 			status.Error = err.Error()
+		} else if status.State == "complete" {
+			// Keep the terminal state reported by the engine.
 		} else {
 			if status.Error == "" && status.DownloadedBytes >= status.TotalBytes {
 				status.State = "complete"
@@ -218,11 +240,10 @@ func (a *App) StartTorrent(torrentPath string, outputDir string) error {
 			}
 		}
 		job.status = status
-		if a.engine == engine {
+		if a.engine == job.engine {
 			a.status = status
 		}
 	}()
-	return nil
 }
 
 func (a *App) StopDownload() {
@@ -233,7 +254,7 @@ func (a *App) StopDownload() {
 	}
 	a.mu.Unlock()
 	if engine != nil {
-		_ = engine.Close()
+		_ = engine.Stop()
 	}
 }
 
@@ -241,11 +262,11 @@ func (a *App) StopTorrent(torrentPath string) {
 	a.mu.Lock()
 	job := a.jobs[torrentPath]
 	if job != nil {
-		job.status.State = "stopping"
+		job.status.State = "paused"
 	}
 	a.mu.Unlock()
 	if job != nil {
-		_ = job.engine.Close()
+		_ = job.engine.Stop()
 	}
 }
 

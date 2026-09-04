@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"time"
 
 	"github.com/xmasdev/Cantaloupe/engine/peer/messages"
 )
@@ -24,7 +25,7 @@ func NewConnection(conn net.Conn) *Connection {
 }
 
 func Connect(address string) (*Connection, error) {
-	conn, err := net.Dial("tcp", address)
+	conn, err := net.DialTimeout("tcp", address, 5*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -32,6 +33,13 @@ func Connect(address string) (*Connection, error) {
 	return &Connection{
 		conn: conn,
 	}, nil
+}
+
+func (c *Connection) SetDeadline(deadline time.Time) error {
+	if c == nil || c.conn == nil {
+		return errors.New("connection is nil")
+	}
+	return c.conn.SetDeadline(deadline)
 }
 
 func (c *Connection) Close() error {

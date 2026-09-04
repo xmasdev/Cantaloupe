@@ -3,6 +3,7 @@ package download
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/xmasdev/Cantaloupe/engine/peer"
 	"github.com/xmasdev/Cantaloupe/engine/peer/messages"
@@ -64,6 +65,13 @@ func downloadPiece(
 			continue
 		}
 
+		// Set the deadline before writing the request as well as reading its
+		// response. Negotiation may have left an earlier deadline on the
+		// connection.
+		if err := session.Connection.SetDeadline(time.Now().Add(30 * time.Second)); err != nil {
+			return fmt.Errorf("set deadline for piece %d block at %d: %w", piece.Index, block.Begin, err)
+		}
+
 		err := session.RequestBlock(
 			piece.Index,
 			block.Begin,
@@ -77,7 +85,6 @@ func downloadPiece(
 				err,
 			)
 		}
-
 		for {
 			message, err := session.ReadMessage()
 			if err != nil {
@@ -91,6 +98,9 @@ func downloadPiece(
 
 			if message.KeepAlive {
 				continue
+			}
+			if message.ID == messages.Choke {
+				return fmt.Errorf("peer became choked while downloading piece %d", piece.Index)
 			}
 
 			if message.ID != messages.Piece {
