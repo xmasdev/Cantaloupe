@@ -77,6 +77,17 @@ func (p *Piece) Complete() bool {
 	return true
 }
 
+func (p *Piece) DownloadedBytes() int64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	var total int64
+	for _, block := range p.Blocks {
+		total += int64(len(block.Data))
+	}
+	return total
+}
+
 func (p *Piece) Data() ([]byte, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
