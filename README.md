@@ -82,3 +82,9 @@ build/               desktop build assets and application icon
 Torrent downloads depend on reachable peers. Trackers can return peers that are offline, choked, or no longer have the torrent, so it can take time for useful data to arrive.
 
 Piece verification can be disabled in Settings, but leaving it enabled is recommended for normal downloads.
+
+## Screenshots
+
+![Cantaloupe screenshot 1](https://raw.githubusercontent.com/xmasdev/Cantaloupe/screenshots/screenshot1.png)
+
+![Cantaloupe screenshot 2](https://raw.githubusercontent.com/xmasdev/Cantaloupe/screenshots/screenshot2.png)
