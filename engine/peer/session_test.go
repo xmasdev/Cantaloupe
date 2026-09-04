@@ -1,6 +1,7 @@
 package peer
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"testing"
@@ -318,4 +319,115 @@ func TestPeerSession_RequestBlock_InvalidArguments(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPeerSession_WaitForBitfield(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+
+	session := &PeerSession{
+		Connection: &Connection{
+			conn: client,
+		},
+	}
+
+	expectedBitfield := []byte{0b10100000, 0b01000000}
+
+	errCh := make(chan error, 1)
+
+	go func() {
+		errCh <- (&Connection{conn: server}).WriteMessage(
+			messages.BitfieldMessage(expectedBitfield),
+		)
+	}()
+
+	if err := session.WaitForBitfield(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !bytes.Equal(
+		[]byte(session.RemoteBitfield),
+		expectedBitfield,
+	) {
+		t.Fatalf(
+			"expected bitfield %08b, got %08b",
+			expectedBitfield,
+			[]byte(session.RemoteBitfield),
+		)
+	}
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("failed to send bitfield: %v", err)
+	}
+}
+
+func TestPeerSession_WaitForBitfield_SkipsOtherMessages(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+
+	session := &PeerSession{
+		Connection: &Connection{
+			conn: client,
+		},
+	}
+
+	expectedBitfield := []byte{0b11000000}
+
+	go func() {
+		conn := &Connection{conn: server}
+
+		// Keep-alive should be ignored.
+		_ = conn.WriteMessage(messages.KeepAliveMessage())
+
+		// Have should be processed by ReadMessage().
+		_ = conn.WriteMessage(messages.HaveMessage(3))
+
+		// Eventually the bitfield arrives.
+		_ = conn.WriteMessage(messages.BitfieldMessage(expectedBitfield))
+	}()
+
+	if err := session.WaitForBitfield(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !bytes.Equal(
+		[]byte(session.RemoteBitfield),
+		expectedBitfield,
+	) {
+		t.Fatalf(
+			"expected bitfield %08b, got %08b",
+			expectedBitfield,
+			[]byte(session.RemoteBitfield),
+		)
+	}
+
+}
+
+func TestPeerSession_WaitForBitfield_ConnectionClosed(t *testing.T) {
+	client, server := net.Pipe()
+
+	session := &PeerSession{
+		Connection: &Connection{
+			conn: client,
+		},
+	}
+
+	done := make(chan error, 1)
+
+	go func() {
+		done <- session.WaitForBitfield()
+	}()
+
+	// Close the remote side without sending a bitfield.
+	server.Close()
+
+	err := <-done
+
+	if err == nil {
+		t.Fatal("expected error when connection closes")
+	}
+
+	client.Close()
 }

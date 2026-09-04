@@ -2,6 +2,7 @@ package peer
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/xmasdev/Cantaloupe/engine/peer/messages"
 	"github.com/xmasdev/Cantaloupe/engine/types"
@@ -104,6 +105,23 @@ func (p *PeerSession) ReadMessage() (messages.Message, error) {
 
 func (p *PeerSession) HasPiece(index int) bool {
 	return p.RemoteBitfield.HasPiece(index)
+}
+
+func (p *PeerSession) WaitForBitfield() error {
+	for {
+		message, err := p.ReadMessage()
+		if err != nil {
+			return fmt.Errorf("failed while waiting for bitfield: %w", err)
+		}
+
+		if message.KeepAlive {
+			continue
+		}
+
+		if message.ID == messages.Bitfield {
+			return nil
+		}
+	}
 }
 
 func (p *PeerSession) RequestBlock(pieceIndex, begin, length int) error {
