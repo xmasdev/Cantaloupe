@@ -9,7 +9,9 @@ import (
 	"github.com/xmasdev/Cantaloupe/engine/peer/messages"
 )
 
-const maxMessageLength = 1 << 14 // 16 KiB
+// A piece message contains a message ID plus a full 16 KiB block and its
+// piece/begin fields. Leave room for that protocol overhead.
+const maxMessageLength = 1 << 20
 
 type Connection struct {
 	conn   net.Conn
