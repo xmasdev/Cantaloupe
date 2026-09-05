@@ -82,4 +82,5 @@ export namespace main {
 	        this.status = source["status"];
 	    }
 	}
+
 }

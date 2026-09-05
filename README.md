@@ -57,7 +57,7 @@ go vet ./...
 Build the frontend:
 
 ```bash
-cd engine/frontend
+cd frontend
 npm install
 npm run build
 ```
@@ -73,7 +73,7 @@ wails build
 ```text
 engine/              torrent engine, peers, trackers, and storage
 engine/cmd/          command-line downloader
-engine/frontend/     Wails React interface
+frontend/            Wails React interface
 build/               desktop build assets and application icon
 ```
 
