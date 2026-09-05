@@ -21,3 +21,5 @@
 .detail-table-row small { color: #69757b; font-size: 10px; }
 .tracker-row { grid-template-columns: minmax(0, 1fr) 100px; }
 @media (max-width: 760px) { .nav-rail { width: 58px; flex-basis: 58px; padding: 17px 8px; }.app-brand span:last-child, .add-button, .nav-caption, .nav-link b, .engine-status, .nav-link:not(.selected) { display: none; }.nav-link.selected { justify-content: center; padding: 10px 0; }.app-brand { padding: 0 8px; }.window-bar, .toolbar, .table-head, .torrent-row, .details-tabs, .details-content, .status-bar { padding-left: 16px; padding-right: 16px; }.toolbar { align-items: stretch; flex-direction: column; gap: 8px; }.search { width: 100%; }.detail-grid { margin-left: 0; grid-template-columns: 1fr 1fr; gap: 16px; }.status-bar .secure { display: none; } }
+
+.table-head, .torrent-row { grid-template-columns: minmax(220px, 2.3fr) 1.05fr 1.2fr .9fr .55fr .7fr; }
