@@ -1,5 +1,5 @@
 export namespace main {
-	
+
 	export class DownloadStatus {
 	    state: string;
 	    name: string;
@@ -15,11 +15,11 @@ export namespace main {
 	    downloadSpeed: number;
 	    uploadSpeed: number;
 	    updatedAt: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new DownloadStatus(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.state = source["state"];
@@ -82,5 +82,4 @@ export namespace main {
 	        this.status = source["status"];
 	    }
 	}
-
 }
